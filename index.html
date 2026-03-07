@@ -46,8 +46,9 @@
         }
         
         input[type="checkbox"] {
-            margin-right: 12px;
-            transform: scale(1.2);
+            margin-right: 20px;
+            margin-left: 10px;
+            transform: scale(1.6);
             cursor: pointer;
         }
         
@@ -69,17 +70,25 @@
         }
 
         button.increment-btn {
-            margin-right: 20px;
+            margin-right: 16px;
             margin-left: 10px;
             transform: scale(1.2);
             cursor: pointer;
-            /* width: 20px; */
+            line-height: 24px;
+            font-size: 16px;
             text-align: center;
             background-color: #43a047;
             border: none;
             border-radius: 2px;
-            line-height: 18px;
             color: white;
+            min-width: 27px;
+        }
+
+
+        button.increment-btn.empty {
+            background-color: #f3e8db;
+            color: black;
+         
         }
 
         @media (max-width: 500px) {
@@ -205,7 +214,7 @@
         </div>
         <div class="status" id="status"></div>
         <div class="controls">
-            <button type="button" class="add-btn" onclick="addCheckbox()">Add new</button>
+            <button type="button" class="add-btn" onclick="addCheckbox()">Add checkbox</button>
             <button type="button" class="add-btn" onclick="addNumberedCheckbox()">Add number</button>
             <button type="button" class="delete-btn" onclick="deleteLastCheckbox()">Delete last</button>
             <button type="button" class="uncheck-btn" onclick="uncheckAll()">Uncheck all</button>
@@ -252,7 +261,12 @@
 
                 console.log(checkbox);
                 checkbox.currentValue++;
-                document.getElementById(target_id + '_number').value = checkbox.currentValue;
+                const btn = document.getElementById(target_id + '_btn');
+                btn.textContent = checkbox.currentValue;
+                // Remove "empty" class when value is more than zero
+                if (checkbox.currentValue > 0) {
+                    btn.classList.remove('empty');
+                }
                 target_is_checked = true;
             }
             else {
@@ -331,9 +345,10 @@
                 let checkboxItemHTML = '';
 
                 if (checkbox.useNumbers) {
+                    const emptyClass = checkbox.currentValue === 0 ? ' empty' : '';
                     checkboxItemHTML = `
-                        <input type="number" id="${id}_number" name="${id}_number" value="${checkbox.currentValue}">
-                        <button type="button" id="${id}_btn" class="increment-btn">+</button>
+                        <input type="hidden" id="${id}_number" name="${id}_number" value="${checkbox.currentValue}">
+                        <button type="button" id="${id}_btn" class="increment-btn${emptyClass}">${checkbox.currentValue}</button>
                         <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.currentValue ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
                     `;
                 }
