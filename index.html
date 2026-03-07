@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily habits</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .checkbox-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        input[type="checkbox"] {
+            margin-right: 12px;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        
+        input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            color: #555;
+            background-color: white;
+        }
+
+        @media (max-width: 500px) {
+            .checkbox-item input[type="text"] {
+                flex: 0 0 60%;
+                max-width: 45%;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .controls button {
+                width: 100%;
+            }
+        }
+
+        /* When disabled, change the color to #ccc */
+        input[type="text"]:disabled {
+            color: #414141;
+            background-color: #f0f0f0;
+        }
+
+        span.date-checked {
+            font-size: 13px;
+            margin-left: auto;
+            color:#239d38;
+        }
+
+        .stale-indicator {
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background-color: #d36944;
+            margin-right: 6px;
+            margin-left: 7px;
+            vertical-align: middle;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e8f5e8;
+            border-radius: 5px;
+            color: #2d5a2d;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .controls button {
+            padding: 8px 14px;
+            border-radius: 4px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .controls button.clear-btn {
+            background-color: #e53935;
+            color: #fff;
+        }
+
+        .controls button.clear-btn:hover {
+            background-color: #c62828;
+        }
+
+        .controls button.uncheck-btn {
+            background-color: #1976d2;
+            color: #fff;
+        }
+
+        .controls button.uncheck-btn:hover {
+            background-color: #115293;
+        }
+
+        .controls button.add-btn {
+            background-color: #43a047;
+            color: #fff;
+        }
+
+        .controls button.add-btn:hover {
+            background-color: #2e7d32;
+        }
+
+        .controls button.delete-btn {
+            background-color: #757575;
+            color: #fff;
+        }
+
+        .controls button.delete-btn:hover {
+            background-color: #545454;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Daily habits</h1>
+        <div class="checkbox-group" id="checkbox-group">
+            <div class="checkbox-item">
+                <input type="checkbox" id="checkbox1" name="checkbox1">
+                <input type="text" id="text1" name="text1" placeholder="Enter task description...">
+                <span class="date-checked"></span>
+            </div>
+            <div class="checkbox-item">
+                <input type="checkbox" id="checkbox2" name="checkbox2">
+                <input type="text" id="text2" name="text2" placeholder="Enter task description...">
+            </div>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="controls">
+            <button type="button" class="add-btn" onclick="addCheckbox()">Add new</button>
+            <button type="button" class="delete-btn" onclick="deleteLastCheckbox()">Delete last</button>
+            <button type="button" class="uncheck-btn" onclick="uncheckAll()">Uncheck all</button>
+            <button type="button" class="clear-btn" onclick="clearAllData()">Clear all saved data</button>
+        </div>
+    </div>
+
+    <script>
+        // Initial checkbox configuration
+        function getInitialCheckboxInfo() {
+            return {
+                'checkbox1': {
+                    checked: false,
+                    text: "",
+                    dateChecked: '',
+                    timestampChecked: ''
+                },
+                'checkbox2': {
+                    checked: false,
+                    text: "",
+                    dateChecked: '',
+                    timestampChecked: ''
+                }
+            };
+        }
+
+        // Array of checkboxes
+        let currentCheckboxInfo = getInitialCheckboxInfo();
+
+        // Test mode flag (driven by URL parameter ?test)
+        const isTestMode = new URLSearchParams(window.location.search).has('test');
+
+        // Handler for checkbox change events
+        function handleCheckboxChange(e) {
+            let checkbox = currentCheckboxInfo[e.target.id];
+            checkbox.checked = e.target.checked;
+            if (e.target.checked) {
+                // Get the current time in the format of HH:MM
+                let hours = new Date().getHours();
+                let minutes = new Date().getMinutes();
+                if (hours < 10) {
+                    hours = '0' + hours;
+                }
+                if (minutes < 10) {
+                    minutes = '0' + minutes;
+                }
+                checkbox.dateChecked = hours + ':' + minutes;
+                checkbox.timestampChecked = new Date().toISOString();
+                document.getElementById(e.target.id + '_date_span').textContent = checkbox.dateChecked;
+                document.getElementById(e.target.id + '_text').disabled = true;
+            } else {
+                checkbox.dateChecked = '';
+                checkbox.timestampChecked = '';
+                document.getElementById(e.target.id + '_date_span').textContent = '';
+                document.getElementById(e.target.id + '_text').disabled = false;
+            }
+            saveCheckboxInfo(e.target.id, checkbox);
+
+            // Immediately refresh indicator for this checkbox
+            updateStaleIndicators();
+        }
+
+        function handleTextChange(e) {
+            console.log('text input changed');
+            let checkboxId = e.target.getAttribute('data-id');
+            let checkbox = currentCheckboxInfo[checkboxId];
+            console.log(checkbox);
+            if (checkbox) {
+                checkbox.text = e.target.value;
+                saveCheckboxInfo( checkboxId, checkbox );
+            }
+            else {
+                console.log('checkbox not found');
+            }
+        }
+   
+        // Function to load checkbox states and text contents from the checkboxInfo object
+        function loadStates(checkboxInfo) {
+            console.log('loadStates');
+            console.log(checkboxInfo);
+            console.log(Object.keys(checkboxInfo).length);
+
+            currentCheckboxInfo = checkboxInfo;
+
+            // Clear the checkbox-group
+            const checkboxGroup = document.getElementById('checkbox-group');
+            checkboxGroup.innerHTML = '';
+
+            // Add the checkboxes to the checkbox-group (if any)
+            Object.keys(checkboxInfo).forEach(id => {
+                let checkbox = checkboxInfo[id];
+                
+                console.log(checkbox);
+                const checkboxItem = document.createElement('div');
+                checkboxItem.classList.add('checkbox-item');
+                
+                let checkboxItemHTML = `
+                    <input type="checkbox" id="${id}" name="${id}" ${checkbox.checked ? 'checked' : ''}>
+                    <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.checked ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
+                `;
+
+                const dateValue = checkbox.dateChecked || '';
+                const timestampValue = checkbox.timestampChecked || '';
+
+                if (dateValue) {
+                    checkboxItemHTML += `<input type="hidden" id="${id}_date" name="${id}_date" data-id="${id}" value="${dateValue}">`;
+                    checkboxItemHTML += `<input type="hidden" id="${id}_timestamp" name="${id}_timestamp" data-id="${id}" value="${timestampValue}">`;
+                    checkboxItemHTML += `<span id="${id}_age_indicator" class="stale-indicator" style="display:none;"></span>`;
+                    checkboxItemHTML += `<span id="${id}_date_span" title="${timestampValue}" class="date-checked">${checkbox.dateChecked}</span>`;
+                }
+                else {
+                    checkboxItemHTML += `<input type="hidden" id="${id}_date" name="${id}_date" data-id="${id}" value="">`;
+                    checkboxItemHTML += `<input type="hidden" id="${id}_timestamp" name="${id}_timestamp" data-id="${id}" value="">`;
+                    checkboxItemHTML += `<span id="${id}_age_indicator" class="stale-indicator" style="display:none;"></span>`;
+                    checkboxItemHTML += `<span id="${id}_date_span" class="date-checked"></span>`;
+                }
+
+                checkboxItem.innerHTML = checkboxItemHTML;
+                checkboxGroup.appendChild(checkboxItem);
+
+                // Add event listener to the checkbox
+                checkboxItem.querySelector('input[type="checkbox"]').addEventListener('change', handleCheckboxChange);
+
+                // Add event listener to the text input
+                checkboxItem.querySelector('input[type="text"]').addEventListener('input', handleTextChange);
+            });
+
+            // Show loaded message if any data was restored
+            if (Object.keys(checkboxInfo).length > 0) {
+                const status = document.getElementById('status');
+                status.textContent = 'Habits info loaded.';
+                status.style.backgroundColor = '#e8f4fd';
+                status.style.color = '#1e3a8a';
+            }
+
+            // Update age indicators after rendering
+            updateStaleIndicators();
+        }
+
+        function updateStaleIndicators() {
+            // Special test mode: first checked item is stale, second is red-stale
+            if (isTestMode) {
+                const allIds = Object.keys(currentCheckboxInfo);
+
+                // Hide all indicators first
+                allIds.forEach(id => {
+                    const ind = document.getElementById(id + '_age_indicator');
+                    if (ind) {
+                        ind.style.display = 'none';
+                    }
+                });
+
+                const checkedIds = allIds.filter(id => currentCheckboxInfo[id] && currentCheckboxInfo[id].checked);
+
+                if (checkedIds[0]) {
+                    const ind1 = document.getElementById(checkedIds[0] + '_age_indicator');
+                    if (ind1) {
+                        ind1.style.display = 'inline-block';
+                        ind1.style.backgroundColor = '#d36944'; // normal stale
+                    }
+                }
+
+                if (checkedIds[1]) {
+                    const ind2 = document.getElementById(checkedIds[1] + '_age_indicator');
+                    if (ind2) {
+                        ind2.style.display = 'inline-block';
+                        ind2.style.backgroundColor = '#d32f2f'; // red stale
+                    }
+                }
+
+                return;
+            }
+
+            const now = new Date();
+            const todayYear = now.getFullYear();
+            const todayMonth = now.getMonth();
+            const todayDate = now.getDate();
+
+            Object.keys(currentCheckboxInfo).forEach(id => {
+                const info = currentCheckboxInfo[id];
+                const indicator = document.getElementById(id + '_age_indicator');
+                if (!indicator) {
+                    return;
+                }
+
+                if (info && info.timestampChecked) {
+                    const tsDate = new Date(info.timestampChecked);
+                    if (isNaN(tsDate.getTime())) {
+                        indicator.style.display = 'none';
+                        return;
+                    }
+
+                    const tsYear = tsDate.getFullYear();
+                    const tsMonth = tsDate.getMonth();
+                    const tsDay = tsDate.getDate();
+
+                    // Only show indicator if timestamp is not from the current calendar day
+                    const isSameDay = tsYear === todayYear && tsMonth === todayMonth && tsDay === todayDate;
+                    if (isSameDay) {
+                        indicator.style.display = 'none';
+                        return;
+                    }
+
+                    // Compute age in full days
+                    const msPerDay = 24 * 60 * 60 * 1000;
+                    const diffDays = Math.floor((now - tsDate) / msPerDay);
+
+                    indicator.style.display = 'inline-block';
+
+                    // Default (1–2 days old): keep existing color
+                    // Older than 2 days: show red
+                    if (diffDays > 2) {
+                        indicator.style.backgroundColor = '#d32f2f'; // red
+                    } else {
+                        indicator.style.backgroundColor = '#d36944'; // original stale color
+                    }
+                } else {
+                    indicator.style.display = 'none';
+                }
+            });
+        }
+
+        function clearAllData() {
+            // Remove saved data
+            localStorage.removeItem('checkboxInfo');
+
+            // Reset to the two initial checkboxes
+            currentCheckboxInfo = getInitialCheckboxInfo();
+
+            // Re-render using the fresh state
+            loadStates(currentCheckboxInfo);
+
+            const status = document.getElementById('status');
+            status.textContent = 'All data cleared.';
+            status.style.backgroundColor = '#fdecea';
+            status.style.color = '#b71c1c';
+        }
+
+        function saveCheckboxInfo( id, checkbox ) {
+            console.log('Saving for id: ' + id);
+            console.log(checkbox);
+            currentCheckboxInfo[id] = checkbox;
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+        }
+
+        function addCheckbox() {
+            // Determine next numeric index based on existing checkbox IDs
+            let maxIndex = 0;
+            Object.keys(currentCheckboxInfo).forEach(id => {
+                const match = id.match(/^checkbox(\d+)$/);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (!isNaN(num) && num > maxIndex) {
+                        maxIndex = num;
+                    }
+                }
+            });
+
+            const newId = 'checkbox' + (maxIndex + 1);
+            currentCheckboxInfo[newId] = {
+                checked: false,
+                text: '',
+                dateChecked: '',
+                timestampChecked: ''
+            };
+
+            // Persist and re-render
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            loadStates(currentCheckboxInfo);
+
+            const status = document.getElementById('status');
+            status.textContent = 'New item added.';
+            status.style.backgroundColor = '#e8f5e8';
+            status.style.color = '#2d5a2d';
+        }
+
+        function deleteLastCheckbox() {
+            const ids = Object.keys(currentCheckboxInfo)
+                .map(id => {
+                    const match = id.match(/^checkbox(\d+)$/);
+                    return match ? { id, num: parseInt(match[1], 10) } : null;
+                })
+                .filter(Boolean)
+                .sort((a, b) => a.num - b.num);
+
+            if (ids.length === 0) {
+                return;
+            }
+
+            const last = ids[ids.length - 1].id;
+            delete currentCheckboxInfo[last];
+
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            loadStates(currentCheckboxInfo);
+
+            const status = document.getElementById('status');
+            status.textContent = 'Deleted last item.';
+            status.style.backgroundColor = '#fdecea';
+            status.style.color = '#b71c1c';
+        }
+        function showInitialMessage() {
+            const status = document.getElementById('status');
+            status.textContent = 'Welcome! Type habit names to track.';
+            status.style.backgroundColor = '#e8f5e8';
+            status.style.color = '#2d5a2d';
+        }
+
+        function uncheckAll() {
+            // Uncheck all checkboxes and clear their dateChecked / timestampChecked
+            Object.keys(currentCheckboxInfo).forEach(id => {
+                currentCheckboxInfo[id].checked = false;
+                currentCheckboxInfo[id].dateChecked = '';
+                currentCheckboxInfo[id].timestampChecked = '';
+            });
+
+            // Persist the new state
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+
+            // Re-render the UI with updated state
+            loadStates(currentCheckboxInfo);
+
+            const status = document.getElementById('status');
+            status.textContent = 'Unchecked all.';
+            status.style.backgroundColor = '#fff8e1';
+            status.style.color = '#ff8f00';
+        }
+        
+        // Initialize the app
+        function init() {
+            
+            // Load checkbox states
+            const savedCheckboxInfo = localStorage.getItem('checkboxInfo');
+            if (savedCheckboxInfo) {
+                parsedCheckboxInfo = JSON.parse(savedCheckboxInfo);
+                if (Object.keys(parsedCheckboxInfo).length > 0) {
+
+                    currentCheckboxInfo = parsedCheckboxInfo;
+                    loadStates(parsedCheckboxInfo);
+                }
+                else {
+                    clearAllData();
+                }
+            }
+            else {
+                 // Reset to the two initial checkboxes
+                currentCheckboxInfo = getInitialCheckboxInfo();
+
+                // Re-render using the fresh state
+                loadStates(currentCheckboxInfo);
+                showInitialMessage();
+            }
+
+            // Periodically refresh stale indicators
+            setInterval(updateStaleIndicators, 10000);
+        }
+        
+        // Run when the page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
