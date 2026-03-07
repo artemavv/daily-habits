@@ -60,6 +60,28 @@
             background-color: white;
         }
 
+        input[type="number"] {
+            margin-left: 10px;
+            margin-right: 12px;
+            transform: scale(1.2);
+            cursor: pointer;
+            width: 40px;
+        }
+
+        button.increment-btn {
+            margin-right: 20px;
+            margin-left: 10px;
+            transform: scale(1.2);
+            cursor: pointer;
+            /* width: 20px; */
+            text-align: center;
+            background-color: #43a047;
+            border: none;
+            border-radius: 2px;
+            line-height: 18px;
+            color: white;
+        }
+
         @media (max-width: 500px) {
             .checkbox-item input[type="text"] {
                 flex: 0 0 60%;
@@ -184,6 +206,7 @@
         <div class="status" id="status"></div>
         <div class="controls">
             <button type="button" class="add-btn" onclick="addCheckbox()">Add new</button>
+            <button type="button" class="add-btn" onclick="addNumberedCheckbox()">Add number</button>
             <button type="button" class="delete-btn" onclick="deleteLastCheckbox()">Delete last</button>
             <button type="button" class="uncheck-btn" onclick="uncheckAll()">Uncheck all</button>
             <button type="button" class="clear-btn" onclick="clearAllData()">Clear all saved data</button>
@@ -196,12 +219,14 @@
             return {
                 'checkbox1': {
                     checked: false,
+                    useNumbers: false,
                     text: "",
                     dateChecked: '',
                     timestampChecked: ''
                 },
                 'checkbox2': {
                     checked: false,
+                    useNumbers: false,
                     text: "",
                     dateChecked: '',
                     timestampChecked: ''
@@ -217,9 +242,27 @@
 
         // Handler for checkbox change events
         function handleCheckboxChange(e) {
-            let checkbox = currentCheckboxInfo[e.target.id];
-            checkbox.checked = e.target.checked;
-            if (e.target.checked) {
+            console.log('handleCheckboxChange');
+            console.log(e.target.id);
+            // if this is a numbered checkbox, increment the current value
+            if (e.target.id.endsWith('_btn')) {
+                
+                var target_id = e.target.id.replace('_btn', '');
+                var checkbox = currentCheckboxInfo[target_id];
+
+                console.log(checkbox);
+                checkbox.currentValue++;
+                document.getElementById(target_id + '_number').value = checkbox.currentValue;
+                target_is_checked = true;
+            }
+            else {
+                target_id = e.target.id;
+                checkbox = currentCheckboxInfo[target_id];
+                checkbox.checked = e.target.checked;
+                target_is_checked = e.target.checked;
+            }
+
+            if ( target_is_checked ) {
                 // Get the current time in the format of HH:MM
                 let hours = new Date().getHours();
                 let minutes = new Date().getMinutes();
@@ -231,15 +274,16 @@
                 }
                 checkbox.dateChecked = hours + ':' + minutes;
                 checkbox.timestampChecked = new Date().toISOString();
-                document.getElementById(e.target.id + '_date_span').textContent = checkbox.dateChecked;
-                document.getElementById(e.target.id + '_text').disabled = true;
+                document.getElementById(target_id + '_date_span').textContent = checkbox.dateChecked;
+                document.getElementById(target_id + '_text').disabled = true;
             } else {
                 checkbox.dateChecked = '';
                 checkbox.timestampChecked = '';
-                document.getElementById(e.target.id + '_date_span').textContent = '';
-                document.getElementById(e.target.id + '_text').disabled = false;
+                document.getElementById(target_id + '_date_span').textContent = '';
+                document.getElementById(target_id + '_text').disabled = false;
             }
-            saveCheckboxInfo(e.target.id, checkbox);
+
+            saveCheckboxInfo(target_id, checkbox);
 
             // Immediately refresh indicator for this checkbox
             updateStaleIndicators();
@@ -275,14 +319,30 @@
             Object.keys(checkboxInfo).forEach(id => {
                 let checkbox = checkboxInfo[id];
                 
+                // Ensure useNumbers is set (default to false if missing)
+                if (checkbox.useNumbers === undefined) {
+                    checkbox.useNumbers = false;
+                }
+                
                 console.log(checkbox);
                 const checkboxItem = document.createElement('div');
                 checkboxItem.classList.add('checkbox-item');
                 
-                let checkboxItemHTML = `
-                    <input type="checkbox" id="${id}" name="${id}" ${checkbox.checked ? 'checked' : ''}>
-                    <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.checked ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
-                `;
+                let checkboxItemHTML = '';
+
+                if (checkbox.useNumbers) {
+                    checkboxItemHTML = `
+                        <input type="number" id="${id}_number" name="${id}_number" value="${checkbox.currentValue}">
+                        <button type="button" id="${id}_btn" class="increment-btn">+</button>
+                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.currentValue ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
+                    `;
+                }
+                else {
+                    checkboxItemHTML = `
+                        <input type="checkbox" id="${id}" name="${id}" ${checkbox.checked ? 'checked' : ''}>
+                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.checked ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
+                    `;
+                }
 
                 const dateValue = checkbox.dateChecked || '';
                 const timestampValue = checkbox.timestampChecked || '';
@@ -303,9 +363,15 @@
                 checkboxItem.innerHTML = checkboxItemHTML;
                 checkboxGroup.appendChild(checkboxItem);
 
-                // Add event listener to the checkbox
-                checkboxItem.querySelector('input[type="checkbox"]').addEventListener('change', handleCheckboxChange);
-
+                if ( ! checkbox.useNumbers) {
+                    // Add event listener to the checkbox
+                    checkboxItem.querySelector('input[type="checkbox"]').addEventListener('change', handleCheckboxChange);
+                }
+                else {
+                    console.log('adding event listener to button');
+                    // Add event listener to the button
+                    checkboxItem.querySelector('button').addEventListener('click', handleCheckboxChange);
+                }
                 // Add event listener to the text input
                 checkboxItem.querySelector('input[type="text"]').addEventListener('input', handleTextChange);
             });
@@ -444,6 +510,40 @@
             const newId = 'checkbox' + (maxIndex + 1);
             currentCheckboxInfo[newId] = {
                 checked: false,
+                useNumbers: false,
+                text: '',
+                dateChecked: '',
+                timestampChecked: ''
+            };
+
+            // Persist and re-render
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            loadStates(currentCheckboxInfo);
+
+            const status = document.getElementById('status');
+            status.textContent = 'New item added.';
+            status.style.backgroundColor = '#e8f5e8';
+            status.style.color = '#2d5a2d';
+        }
+
+        function addNumberedCheckbox() {
+            // Determine next numeric index based on existing checkbox IDs
+            let maxIndex = 0;
+            Object.keys(currentCheckboxInfo).forEach(id => {
+                const match = id.match(/^checkbox(\d+)$/);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (!isNaN(num) && num > maxIndex) {
+                        maxIndex = num;
+                    }
+                }
+            });
+
+            const newId = 'checkbox' + (maxIndex + 1);
+            currentCheckboxInfo[newId] = {
+                checked: false,
+                currentValue: 0,
+                useNumbers: true,
                 text: '',
                 dateChecked: '',
                 timestampChecked: ''
@@ -493,9 +593,17 @@
         function uncheckAll() {
             // Uncheck all checkboxes and clear their dateChecked / timestampChecked
             Object.keys(currentCheckboxInfo).forEach(id => {
-                currentCheckboxInfo[id].checked = false;
-                currentCheckboxInfo[id].dateChecked = '';
-                currentCheckboxInfo[id].timestampChecked = '';
+                const checkbox = currentCheckboxInfo[id];
+                if (checkbox.useNumbers) {
+                    // For numbered checkboxes, reset currentValue to 0
+                    checkbox.currentValue = 0;
+                } else {
+                    // For regular checkboxes, set checked to false
+                    checkbox.checked = false;
+                }
+                // Clear date and timestamp for both types
+                checkbox.dateChecked = '';
+                checkbox.timestampChecked = '';
             });
 
             // Persist the new state
