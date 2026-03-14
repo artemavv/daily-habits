@@ -8,14 +8,14 @@
         body {
             font-family: Arial, sans-serif;
             max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
+            margin: 0px auto;
+            padding: 5px;
             background-color: #f5f5f5;
         }
         
         .container {
             background-color: white;
-            padding: 30px;
+            padding: 5px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
@@ -48,8 +48,9 @@
         input[type="checkbox"] {
             margin-right: 20px;
             margin-left: 10px;
-            transform: scale(1.6);
+            transform: scale(1.9);
             cursor: pointer;
+            min-width: 30px;
         }
         
         input[type="text"] {
@@ -81,7 +82,7 @@
             border: none;
             border-radius: 2px;
             color: white;
-            min-width: 27px;
+            min-width: 30px;
         }
 
 
@@ -289,18 +290,128 @@
                 checkbox.dateChecked = hours + ':' + minutes;
                 checkbox.timestampChecked = new Date().toISOString();
                 document.getElementById(target_id + '_date_span').textContent = checkbox.dateChecked;
-                document.getElementById(target_id + '_text').disabled = true;
             } else {
                 checkbox.dateChecked = '';
                 checkbox.timestampChecked = '';
                 document.getElementById(target_id + '_date_span').textContent = '';
-                document.getElementById(target_id + '_text').disabled = false;
             }
 
             saveCheckboxInfo(target_id, checkbox);
 
             // Immediately refresh indicator for this checkbox
             updateStaleIndicators();
+        }
+
+        function resetCheckboxItemById(itemId) {
+            const checkbox = currentCheckboxInfo[itemId];
+            if (!checkbox) {
+                return;
+            }
+
+            if (checkbox.useNumbers) {
+                checkbox.currentValue = 0;
+                const btn = document.getElementById(itemId + '_btn');
+                if (btn) {
+                    btn.textContent = '0';
+                    btn.classList.add('empty');
+                }
+            } else {
+                checkbox.checked = false;
+                const checkboxInput = document.getElementById(itemId);
+                if (checkboxInput) {
+                    checkboxInput.checked = false;
+                }
+            }
+
+            checkbox.dateChecked = '';
+            checkbox.timestampChecked = '';
+
+            const dateInput = document.getElementById(itemId + '_date');
+            if (dateInput) {
+                dateInput.value = '';
+            }
+            const timestampInput = document.getElementById(itemId + '_timestamp');
+            if (timestampInput) {
+                timestampInput.value = '';
+            }
+            const dateSpan = document.getElementById(itemId + '_date_span');
+            if (dateSpan) {
+                dateSpan.textContent = '';
+                dateSpan.removeAttribute('title');
+            }
+            const textInput = document.getElementById(itemId + '_text');
+            if (textInput) {
+                textInput.disabled = false;
+            }
+
+            saveCheckboxInfo(itemId, checkbox);
+            updateStaleIndicators();
+        }
+
+        function attachResetGestureHandlers(checkboxItem, itemId) {
+            const horizontalThreshold = 170;
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let mouseStartX = 0;
+            let mouseStartY = 0;
+            const activeOpacity = '0.45';
+
+            function setItemDraggedAppearance(isActive) {
+                checkboxItem.style.opacity = isActive ? activeOpacity : '1';
+                checkboxItem.style.cursor = isActive ? 'grabbing' : 'pointer';
+            }
+
+            // Mobile: swipe left/right on item to reset it
+            checkboxItem.addEventListener('touchstart', function (e) {
+                if (!e.touches || e.touches.length === 0) {
+                    return;
+                }
+                setItemDraggedAppearance(true);
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            checkboxItem.addEventListener('touchend', function (e) {
+                setItemDraggedAppearance(false);
+                if (!e.changedTouches || e.changedTouches.length === 0) {
+                    return;
+                }
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = touchEndY - touchStartY;
+                if (Math.abs(deltaX) >= horizontalThreshold && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    resetCheckboxItemById(itemId);
+                }
+            }, { passive: true });
+            checkboxItem.addEventListener('touchcancel', function () {
+                setItemDraggedAppearance(false);
+            }, { passive: true });
+
+            // Desktop: drag left/right on item to reset it
+            checkboxItem.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) {
+                    return;
+                }
+                setItemDraggedAppearance(true);
+                mouseStartX = e.clientX;
+                mouseStartY = e.clientY;
+            });
+
+            checkboxItem.addEventListener('mouseup', function (e) {
+                setItemDraggedAppearance(false);
+                if (e.button !== 0) {
+                    return;
+                }
+                const deltaX = e.clientX - mouseStartX;
+                const deltaY = e.clientY - mouseStartY;
+                if (Math.abs(deltaX) >= horizontalThreshold && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    resetCheckboxItemById(itemId);
+                }
+            });
+            checkboxItem.addEventListener('mouseleave', function () {
+                setItemDraggedAppearance(false);
+            });
         }
 
         function handleTextChange(e) {
@@ -341,6 +452,7 @@
                 console.log(checkbox);
                 const checkboxItem = document.createElement('div');
                 checkboxItem.classList.add('checkbox-item');
+                checkboxItem.setAttribute('data-id', id);
                 
                 let checkboxItemHTML = '';
 
@@ -349,13 +461,13 @@
                     checkboxItemHTML = `
                         <input type="hidden" id="${id}_number" name="${id}_number" value="${checkbox.currentValue}">
                         <button type="button" id="${id}_btn" class="increment-btn${emptyClass}">${checkbox.currentValue}</button>
-                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.currentValue ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
+                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" placeholder="Enter something..." value="${checkbox.text}">
                     `;
                 }
                 else {
                     checkboxItemHTML = `
                         <input type="checkbox" id="${id}" name="${id}" ${checkbox.checked ? 'checked' : ''}>
-                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" ${checkbox.checked ? 'disabled' : ''} placeholder="Enter something..." value="${checkbox.text}">
+                        <input type="text" id="${id}_text" name="${id}_text" data-id="${id}" placeholder="Enter something..." value="${checkbox.text}">
                     `;
                 }
 
@@ -389,6 +501,7 @@
                 }
                 // Add event listener to the text input
                 checkboxItem.querySelector('input[type="text"]').addEventListener('input', handleTextChange);
+                attachResetGestureHandlers(checkboxItem, id);
             });
 
             // Show loaded message if any data was restored
