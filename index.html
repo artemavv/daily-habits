@@ -18,6 +18,7 @@
             padding: 5px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 91vh;
         }
         
         h1 {
@@ -39,10 +40,17 @@
             background-color: #f9f9f9;
             border-radius: 5px;
             border: 1px solid #e0e0e0;
+            cursor: grab;
         }
         
         .checkbox-item:hover {
             background-color: #f0f0f0;
+        }
+
+        .checkbox-item.dragging {
+            opacity: 0.45;
+            cursor: grabbing;
+            border: 3px solid #042505;
         }
         
         input[type="checkbox"] {
@@ -92,10 +100,17 @@
          
         }
 
-        @media (max-width: 500px) {
+
+             
+        input[type="text"] {
+            width: calc(100% - 120px);
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 450px) {
             .checkbox-item input[type="text"] {
-                flex: 0 0 60%;
-                max-width: 45%;
+                width: calc(100% - 120px);
+                box-sizing: border-box;
             }
 
             .controls {
@@ -105,8 +120,10 @@
 
             .controls button {
                 width: 100%;
+                margin: 5px 0;
             }
         }
+   
 
         /* When disabled, change the color to #ccc */
         input[type="text"]:disabled {
@@ -155,7 +172,7 @@
         }
 
         .controls button {
-            padding: 8px 14px;
+            padding: 18px 14px;
             border-radius: 4px;
             border: none;
             font-size: 14px;
@@ -197,6 +214,13 @@
         .controls button.delete-btn:hover {
             background-color: #545454;
         }
+
+        .app-version {
+            margin-top: 10px;
+            text-align: center;
+            color: #757575;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -222,6 +246,7 @@
             <button type="button" class="clear-btn" onclick="clearAllData()">Clear all saved data</button>
         </div>
     </div>
+    <div class="app-version">v1.0</div>
 
     <script>
         // Initial checkbox configuration
@@ -230,6 +255,7 @@
                 'checkbox1': {
                     checked: false,
                     useNumbers: false,
+                    order: 0,
                     text: "",
                     dateChecked: '',
                     timestampChecked: ''
@@ -237,6 +263,7 @@
                 'checkbox2': {
                     checked: false,
                     useNumbers: false,
+                    order: 1,
                     text: "",
                     dateChecked: '',
                     timestampChecked: ''
@@ -348,70 +375,175 @@
             updateStaleIndicators();
         }
 
-        function attachResetGestureHandlers(checkboxItem, itemId) {
-            const horizontalThreshold = 170;
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let mouseStartX = 0;
-            let mouseStartY = 0;
-            const activeOpacity = '0.45';
+        function setupItemGestureHandlers(checkboxItem, itemId) {
+            const swipeThreshold = 170;
+            const gestureActivationThreshold = 12;
+            let isGestureActive = false;
+            let hasReordered = false;
+            let gestureMode = 'none'; // none | swipe | reorder
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let currentY = 0;
+            let previousBodyUserSelect = '';
+            let previousBodyWebkitUserSelect = '';
 
-            function setItemDraggedAppearance(isActive) {
-                checkboxItem.style.opacity = isActive ? activeOpacity : '1';
-                checkboxItem.style.cursor = isActive ? 'grabbing' : 'pointer';
+            function isInteractiveTarget(target) {
+                if (!target || !(target instanceof Element)) {
+                    return false;
+                }
+                return !!target.closest('input[type="text"]');
             }
 
-            // Mobile: swipe left/right on item to reset it
-            checkboxItem.addEventListener('touchstart', function (e) {
-                if (!e.touches || e.touches.length === 0) {
-                    return;
-                }
-                setItemDraggedAppearance(true);
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-            }, { passive: true });
+            function resetGestureState() {
+                isGestureActive = false;
+                hasReordered = false;
+                gestureMode = 'none';
+                startX = 0;
+                startY = 0;
+                currentX = 0;
+                currentY = 0;
+                checkboxItem.classList.remove('dragging');
+                checkboxItem.style.transform = '';
+                document.body.style.userSelect = previousBodyUserSelect;
+                document.body.style.webkitUserSelect = previousBodyWebkitUserSelect;
+            }
 
-            checkboxItem.addEventListener('touchend', function (e) {
-                setItemDraggedAppearance(false);
-                if (!e.changedTouches || e.changedTouches.length === 0) {
+            function moveItemForPointerY(pointerY) {
+                const checkboxGroup = document.getElementById('checkbox-group');
+                const items = Array.from(checkboxGroup.querySelectorAll('.checkbox-item'));
+                const otherItems = items.filter(item => item !== checkboxItem);
+                let inserted = false;
+
+                for (let i = 0; i < otherItems.length; i++) {
+                    const targetItem = otherItems[i];
+                    const rect = targetItem.getBoundingClientRect();
+                    if (pointerY < rect.top + rect.height / 2) {
+                        checkboxGroup.insertBefore(checkboxItem, targetItem);
+                        inserted = true;
+                        break;
+                    }
+                }
+
+                if (!inserted) {
+                    checkboxGroup.appendChild(checkboxItem);
+                }
+            }
+
+            function startGesture(clientX, clientY, target) {
+                if (isInteractiveTarget(target)) {
+                    return false;
+                }
+
+                previousBodyUserSelect = document.body.style.userSelect;
+                previousBodyWebkitUserSelect = document.body.style.webkitUserSelect;
+                document.body.style.userSelect = 'none';
+                document.body.style.webkitUserSelect = 'none';
+                isGestureActive = true;
+                startX = clientX;
+                startY = clientY;
+                currentX = clientX;
+                currentY = clientY;
+                return true;
+            }
+
+            function moveGesture(clientX, clientY, event) {
+                if (!isGestureActive) {
                     return;
                 }
-                const touchEndX = e.changedTouches[0].clientX;
-                const touchEndY = e.changedTouches[0].clientY;
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = touchEndY - touchStartY;
-                if (Math.abs(deltaX) >= horizontalThreshold && Math.abs(deltaX) > Math.abs(deltaY)) {
+
+                currentX = clientX;
+                currentY = clientY;
+
+                const deltaX = currentX - startX;
+                const deltaY = currentY - startY;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+
+                if (gestureMode === 'none' && (absDeltaX >= gestureActivationThreshold || absDeltaY >= gestureActivationThreshold)) {
+                    gestureMode = absDeltaX > absDeltaY ? 'swipe' : 'reorder';
+                }
+
+                if (gestureMode === 'swipe') {
+                    checkboxItem.style.transform = `translateX(${deltaX}px)`;
+                    if (event && event.cancelable) {
+                        event.preventDefault();
+                    }
+                    return;
+                }
+
+                if (gestureMode === 'reorder') {
+                    checkboxItem.classList.add('dragging');
+                    moveItemForPointerY(clientY);
+                    hasReordered = true;
+                    if (event && event.cancelable) {
+                        event.preventDefault();
+                    }
+                }
+            }
+
+            function endGesture() {
+                if (!isGestureActive) {
+                    return;
+                }
+
+                const deltaX = currentX - startX;
+                const deltaY = currentY - startY;
+                const shouldReset = gestureMode === 'swipe'
+                    && Math.abs(deltaX) >= swipeThreshold
+                    && Math.abs(deltaX) > Math.abs(deltaY);
+
+                if (shouldReset) {
                     resetCheckboxItemById(itemId);
+                } else if (hasReordered) {
+                    recalculateCheckboxOrderFromDom();
                 }
-            }, { passive: true });
-            checkboxItem.addEventListener('touchcancel', function () {
-                setItemDraggedAppearance(false);
-            }, { passive: true });
 
-            // Desktop: drag left/right on item to reset it
+                resetGestureState();
+            }
+
             checkboxItem.addEventListener('mousedown', function (e) {
                 if (e.button !== 0) {
                     return;
                 }
-                setItemDraggedAppearance(true);
-                mouseStartX = e.clientX;
-                mouseStartY = e.clientY;
+                const started = startGesture(e.clientX, e.clientY, e.target);
+                if (started) {
+                    e.preventDefault();
+                }
             });
 
-            checkboxItem.addEventListener('mouseup', function (e) {
-                setItemDraggedAppearance(false);
+            window.addEventListener('mousemove', function (e) {
+                moveGesture(e.clientX, e.clientY, e);
+            });
+
+            window.addEventListener('mouseup', function (e) {
                 if (e.button !== 0) {
                     return;
                 }
-                const deltaX = e.clientX - mouseStartX;
-                const deltaY = e.clientY - mouseStartY;
-                if (Math.abs(deltaX) >= horizontalThreshold && Math.abs(deltaX) > Math.abs(deltaY)) {
-                    resetCheckboxItemById(itemId);
+                endGesture();
+            });
+
+            checkboxItem.addEventListener('touchstart', function (e) {
+                if (!e.touches || e.touches.length === 0) {
+                    return;
                 }
-            });
-            checkboxItem.addEventListener('mouseleave', function () {
-                setItemDraggedAppearance(false);
-            });
+                startGesture(e.touches[0].clientX, e.touches[0].clientY, e.target);
+            }, { passive: true });
+
+            checkboxItem.addEventListener('touchmove', function (e) {
+                if (!e.touches || e.touches.length === 0) {
+                    return;
+                }
+                moveGesture(e.touches[0].clientX, e.touches[0].clientY, e);
+            }, { passive: false });
+
+            checkboxItem.addEventListener('touchend', function () {
+                endGesture();
+            }, { passive: true });
+
+            checkboxItem.addEventListener('touchcancel', function () {
+                resetGestureState();
+            }, { passive: true });
         }
 
         function handleTextChange(e) {
@@ -427,7 +559,59 @@
                 console.log('checkbox not found');
             }
         }
-   
+
+        function persistCheckboxInfo() {
+            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+        }
+
+        function getOrderedCheckboxIds(checkboxInfo) {
+            const ids = Object.keys(checkboxInfo);
+            const originalIndexById = new Map(ids.map((id, index) => [id, index]));
+
+            ids.sort((a, b) => {
+                const orderA = checkboxInfo[a] && Number.isFinite(checkboxInfo[a].order) ? checkboxInfo[a].order : Number.MAX_SAFE_INTEGER;
+                const orderB = checkboxInfo[b] && Number.isFinite(checkboxInfo[b].order) ? checkboxInfo[b].order : Number.MAX_SAFE_INTEGER;
+
+                if (orderA !== orderB) {
+                    return orderA - orderB;
+                }
+
+                return (originalIndexById.get(a) || 0) - (originalIndexById.get(b) || 0);
+            });
+
+            return ids;
+        }
+
+        function recalculateCheckboxOrder(orderedIds) {
+            let hasChanges = false;
+
+            orderedIds.forEach((id, index) => {
+                if (!currentCheckboxInfo[id]) {
+                    return;
+                }
+                if (currentCheckboxInfo[id].order !== index) {
+                    currentCheckboxInfo[id].order = index;
+                    hasChanges = true;
+                }
+            });
+
+            if (hasChanges) {
+                persistCheckboxInfo();
+            }
+        }
+
+        function recalculateCheckboxOrderFromDom() {
+            const checkboxGroup = document.getElementById('checkbox-group');
+            const orderedIds = [];
+            checkboxGroup.querySelectorAll('.checkbox-item').forEach(item => {
+                const id = item.getAttribute('data-id');
+                if (id) {
+                    orderedIds.push(id);
+                }
+            });
+            recalculateCheckboxOrder(orderedIds);
+        }
+
         // Function to load checkbox states and text contents from the checkboxInfo object
         function loadStates(checkboxInfo) {
             console.log('loadStates');
@@ -435,13 +619,15 @@
             console.log(Object.keys(checkboxInfo).length);
 
             currentCheckboxInfo = checkboxInfo;
+            const orderedIds = getOrderedCheckboxIds(currentCheckboxInfo);
+            recalculateCheckboxOrder(orderedIds);
 
             // Clear the checkbox-group
             const checkboxGroup = document.getElementById('checkbox-group');
             checkboxGroup.innerHTML = '';
 
             // Add the checkboxes to the checkbox-group (if any)
-            Object.keys(checkboxInfo).forEach(id => {
+            orderedIds.forEach(id => {
                 let checkbox = checkboxInfo[id];
                 
                 // Ensure useNumbers is set (default to false if missing)
@@ -501,7 +687,7 @@
                 }
                 // Add event listener to the text input
                 checkboxItem.querySelector('input[type="text"]').addEventListener('input', handleTextChange);
-                attachResetGestureHandlers(checkboxItem, id);
+                setupItemGestureHandlers(checkboxItem, id);
             });
 
             // Show loaded message if any data was restored
@@ -619,7 +805,14 @@
             console.log('Saving for id: ' + id);
             console.log(checkbox);
             currentCheckboxInfo[id] = checkbox;
-            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            persistCheckboxInfo();
+        }
+
+        function getNextOrderValue() {
+            const orders = Object.keys(currentCheckboxInfo)
+                .map(id => currentCheckboxInfo[id] && currentCheckboxInfo[id].order)
+                .filter(order => Number.isFinite(order));
+            return orders.length > 0 ? Math.max(...orders) + 1 : Object.keys(currentCheckboxInfo).length;
         }
 
         function addCheckbox() {
@@ -639,13 +832,14 @@
             currentCheckboxInfo[newId] = {
                 checked: false,
                 useNumbers: false,
+                order: getNextOrderValue(),
                 text: '',
                 dateChecked: '',
                 timestampChecked: ''
             };
 
             // Persist and re-render
-            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            persistCheckboxInfo();
             loadStates(currentCheckboxInfo);
 
             const status = document.getElementById('status');
@@ -672,13 +866,14 @@
                 checked: false,
                 currentValue: 0,
                 useNumbers: true,
+                order: getNextOrderValue(),
                 text: '',
                 dateChecked: '',
                 timestampChecked: ''
             };
 
             // Persist and re-render
-            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            persistCheckboxInfo();
             loadStates(currentCheckboxInfo);
 
             const status = document.getElementById('status');
@@ -688,22 +883,16 @@
         }
 
         function deleteLastCheckbox() {
-            const ids = Object.keys(currentCheckboxInfo)
-                .map(id => {
-                    const match = id.match(/^checkbox(\d+)$/);
-                    return match ? { id, num: parseInt(match[1], 10) } : null;
-                })
-                .filter(Boolean)
-                .sort((a, b) => a.num - b.num);
+            const ids = getOrderedCheckboxIds(currentCheckboxInfo);
 
             if (ids.length === 0) {
                 return;
             }
 
-            const last = ids[ids.length - 1].id;
+            const last = ids[ids.length - 1];
             delete currentCheckboxInfo[last];
 
-            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            persistCheckboxInfo();
             loadStates(currentCheckboxInfo);
 
             const status = document.getElementById('status');
@@ -735,7 +924,7 @@
             });
 
             // Persist the new state
-            localStorage.setItem('checkboxInfo', JSON.stringify(currentCheckboxInfo));
+            persistCheckboxInfo();
 
             // Re-render the UI with updated state
             loadStates(currentCheckboxInfo);

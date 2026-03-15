@@ -10,19 +10,25 @@ This project explores different approaches to building a todo/habit tracker appl
 
 ### 1. Vanilla JavaScript + HTML
 
-**Practice**
+**Topics practiced:**
 - Local storage for data persistence
 - Dynamic DOM manipulation
-- Event handling
+- Gesture event handling (both for mobile and desktop devices)
 - Responsive design with CSS
 
 **Features:**
 - Add and delete TODO items
 - Timestamp tracking for checkboxes
 - Visual indicators for stale (old) checked items
+- Clear an item by swiping it left(right)
+- "Number" item, which increments by 1 each time you tap/click it
 
 **Usage:**
 Simply open `index.html` in a web browser. 
+
+**Changelog:**
+
+2026-03-15: v1.0 released.
 
 ---
 
